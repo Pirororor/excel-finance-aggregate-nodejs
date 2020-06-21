@@ -58,6 +58,13 @@ const aggregateInfo = (offeringInfos) => {
                     info.breakdown[header] = 0;
                 });
             }
+
+            // if (offeringInfo.getFileName() === '06 Jan 2019.xls') {
+            //     console.log(key, offeringInfo.getFileName(), typeof key);
+            // }
+            // if (key === '3') {
+            //     console.log('before', info.total, info.breakdown);
+            // }
             headers.forEach((header) => {
                 const offeredVal = offeringInfo.getValue(header, key);
                 info.breakdown[header] += offeredVal;
@@ -65,6 +72,10 @@ const aggregateInfo = (offeringInfos) => {
                 totalInfo[header] += offeredVal;
                 grandTotal += offeredVal;
             });
+
+            // if (key === '3') {
+            //     console.log('after', info.total, info.breakdown);
+            // }
             personInfo[key] = info;
         });
     });
@@ -75,6 +86,8 @@ const aggregateInfo = (offeringInfos) => {
         totalInfo,
         grandTotal,
     }
+
+    // console.log(monthInfo);
     return monthInfo;
 };
 
@@ -203,9 +216,12 @@ class OfferingInfo {
 
             const getNameInfo = (name) => {
                 if (isNumeric(name)) {
+                    if (name === '003') {
+                        console.log('numeric', typeof name);
+                    }
                     return {
                         type: 'int',
-                        key: name,
+                        key: `${parseInt(name, 10)}`,
                     };
                 }
                 if (!isNumeric(name.charAt(0))){
@@ -220,6 +236,9 @@ class OfferingInfo {
                 };
             };
             const { key } = getNameInfo(name);
+            if (name === '003') {
+                console.log( 'name', name, 'key', key);
+            }
             if (!this.#values[key] || typeof this.#values[key] === 'undefined') {
                 this.#values[key] = {};
                 Object.keys(this.#headers).forEach((col) => {
@@ -229,9 +248,6 @@ class OfferingInfo {
                 console.log('duplicate detected:', filename, ' -- name:', name)
             }
 
-            if (name === 'aab') {
-                console.log(name, this.#filename);
-            }
             Object.keys(this.#headers).forEach((col) => {
                 const cellVal = file.getCellVal(row, parseInt(col, 10)) || 0;
                 this.#values[key][col] += cellVal;
@@ -294,11 +310,9 @@ const main = async () => {
             files.forEach((file) => {
                 const offeringInfo = new OfferingInfo(dirInfo.path, file);
                 offeringInfos.push(offeringInfo);
+                allOfferingInfos.push(offeringInfo);
             });
             outputInfo[dirInfo.name] = aggregateInfo(offeringInfos);
-            offeringInfos.forEach(x => {
-                allOfferingInfos.push(x);
-            });
         });
 
         const totalInfo = aggregateInfo(allOfferingInfos);
