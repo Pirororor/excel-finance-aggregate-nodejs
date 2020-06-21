@@ -12,6 +12,34 @@ const toChar = (a) => String.fromCharCode(toCharCode('A') + a - 1);
 const toCell = (row, col) => `${toChar(col)}${row}`;
 const isNumeric = (str) => /^\d+$/.test(str);
 
+const convertNameForOutput = (name) => {
+    let nameCamelCase = name.split(' ').map((x) => `${x.charAt(0).toUpperCase()}${x.substr(1)}`).join(' ');
+    if (!isNumeric(nameCamelCase.charAt(0))) {
+        return nameCamelCase;
+    }
+
+    const nameFiltered = nameCamelCase
+        // split into array
+        .split('/')
+        // if length less than 3, prepend with zero until length is 3
+        .map(prependZero)
+
+        // join back to a string with forward slash
+        .join('/');
+
+    return nameFiltered;
+}
+
+/**
+ * @param {String} x
+ */
+const prependZero = (x) => {
+    if (isNumeric(x.charAt(x.length - 1))) {
+        return `${x}`.padStart(3, '0');
+    }
+    return `${x.substring(0, x.length - 1).padStart(3, '0')}${x.substring(x.length - 1)}`;
+}
+
 class ExcelReader {
     #file = null
     constructor(filename) {
@@ -70,17 +98,9 @@ class OfferingInfo {
                         key: name.toLowerCase(),
                     };
                 }
-                /** @type {String} */
-                // const nameLc = name.toLowerCase();
-                // let key = nameLc;
-                // if(nameLc.includes('/')) {
-                //     key = nameLc.substr(0, nameLc.indexOf('/'));
-                // } else if(nameLc.includes(',')) {
-                //     key =  nameLc.substr(0, nameLc.indexOf(','));
-                // }
                 return {
                     type: 'strnum',
-                    key: name.toLowerCase().replace(/^0+/, ''),
+                    key: name.toUpperCase().replace(/,/g, '/').split('/').map(x => x.replace(/^0+/, '')).join('/'),
                 };
             };
             const { key } = getNameInfo(name);
@@ -230,33 +250,18 @@ const main = async () => {
             col += 1;
             worksheet.cell(row, col).string('Total');
 
-            Object.keys(personInfo).forEach((personName) => {
+            const personInfoOutput = {};
+            const personNames = Object.keys(personInfo);
+            personNames.forEach((name) => {
+                const outputName = convertNameForOutput(name);
+                personInfoOutput[outputName] = personInfo[name];
+            });
+            Object.keys(personInfoOutput).sort().forEach((personName) => {
                 row += 1;
                 col = 1;
-                const nameCamelCase = personName.split(' ').map((x) => `${x.charAt(0).toUpperCase()}${x.substr(1)}`).join(' ');
-                const prependZero = (name) => {
-                    if (!isNumeric(name.charAt(0))) {
-                        return name;
-                    }
+                worksheet.cell(row, col).string(personName);
 
-                    const nameFiltered = name
-                        // replace all comma with front slash
-                        .replace(/[,]/g, '/')
-                        // split into array
-                        .split('/')
-                        // if length less than 3, prepend with zero until length is 3
-                        .map((x) => {
-                            const padded = `${x}`.padStart(3, '0');
-                            return padded;
-                        })
-                        // join back to a string with forward slash
-                        .join('/');
-
-                    return nameFiltered;
-                }
-                worksheet.cell(row, col).string(prependZero(nameCamelCase));
-
-                const { breakdown, total } = personInfo[personName];
+                const { breakdown, total } = personInfoOutput[personName];
                 headers.forEach((header) => {
                     const val = breakdown[header];
                     col += 1;
