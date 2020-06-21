@@ -28,7 +28,123 @@ const convertNameForOutput = (name) => {
         .join('/');
 
     return nameFiltered;
-}
+};
+
+const aggregateInfo = (offeringInfos) => {
+    const headerNameMap = {};
+    offeringInfos.forEach((offeringInfo) => {
+        const headers = offeringInfo.getHeaderNames();
+        headers.forEach(header => {
+            headerNameMap[header] = true;
+        });
+    });
+
+    const totalInfo = {};
+    const personInfo = {};
+    const headers = Object.keys(headerNameMap);
+    let grandTotal = 0;
+    headers.forEach(header => {
+        totalInfo[header] = 0;
+    });
+    offeringInfos.forEach((offeringInfo) => {
+        offeringInfo.forEachPerson((key, value) => {
+            let info = personInfo[key];
+            if (!info) {
+                info = {
+                    total: 0,
+                    breakdown: {},
+                };
+                headers.forEach((header)=> {
+                    info.breakdown[header] = 0;
+                });
+            }
+            headers.forEach((header) => {
+                const offeredVal = offeringInfo.getValue(header, key);
+                info.breakdown[header] += offeredVal;
+                info.total += offeredVal;
+                totalInfo[header] += offeredVal;
+                grandTotal += offeredVal;
+            });
+            personInfo[key] = info;
+        });
+    });
+
+    const monthInfo = {
+        headers,
+        personInfo,
+        totalInfo,
+        grandTotal,
+    }
+    return monthInfo;
+};
+
+const outputExcelWorkSheet = (workbook, month, monthInfo) => {
+        const worksheet = workbook.addWorksheet(month);
+        const style = workbook.createStyle({
+            font: {
+                color: '#000000',
+                size: 10,
+            }
+        });
+        const {
+            headers,
+            personInfo,
+            totalInfo,
+            grandTotal,
+        } = monthInfo;
+
+        let col = 1;
+        let row = 1;
+        worksheet.cell(row, col).string('编号 No.');
+        headers.forEach( (header) => {
+            col += 1;
+            worksheet.cell(row, col).string(header);
+        });
+        col += 1;
+        worksheet.cell(row, col).string('Total');
+
+        const personInfoOutput = {};
+        const personNames = Object.keys(personInfo);
+        personNames.forEach((name) => {
+            const outputName = convertNameForOutput(name);
+            personInfoOutput[outputName] = personInfo[name];
+        });
+        Object.keys(personInfoOutput).sort().forEach((personName) => {
+            row += 1;
+            col = 1;
+            worksheet.cell(row, col).string(personName);
+
+            const { breakdown, total } = personInfoOutput[personName];
+            headers.forEach((header) => {
+                const val = breakdown[header];
+                col += 1;
+
+                if (typeof(val) === 'undefined') {
+                    worksheet.cell(row, col).string('undefined');
+                } else {
+                    worksheet.cell(row, col).number(val);
+                }
+            });
+
+            // total for the row
+            col+= 1;
+            worksheet.cell(row, col).number(total);
+        });
+
+        // total for each column
+        row += 1;
+        col = 1;
+        worksheet.cell(row, col).string('Total');
+
+        headers.forEach((header) => {
+            col += 1;
+            worksheet.cell(row, col).number(totalInfo[header]);
+        });
+
+        // grand total
+        col += 1;
+        worksheet.cell(row, col).number(grandTotal);
+};
 
 /**
  * @param {String} x
@@ -168,6 +284,7 @@ const main = async () => {
         const outputInfo = {
         };
 
+        const allOfferingInfos = [];
         subDirectories.forEach((dirInfo) => {
             const offeringInfos = [];
             const files = fs.readdirSync(dirInfo.path)
@@ -178,114 +295,64 @@ const main = async () => {
                 const offeringInfo = new OfferingInfo(dirInfo.path, file);
                 offeringInfos.push(offeringInfo);
             });
-
-            const headerNameMap = {};
-            offeringInfos.forEach((offeringInfo) => {
-                const headers = offeringInfo.getHeaderNames();
-                headers.forEach(header => {
-                    headerNameMap[header] = true;
-                });
+            outputInfo[dirInfo.name] = aggregateInfo(offeringInfos);
+            offeringInfos.forEach(x => {
+                allOfferingInfos.push(x);
             });
-
-            const totalInfo = {};
-            const personInfo = {};
-            const headers = Object.keys(headerNameMap);
-
-            headers.forEach(header => {
-                totalInfo[header] = 0;
-            });
-            offeringInfos.forEach((offeringInfo) => {
-                offeringInfo.forEachPerson((key, value) => {
-                    let info = personInfo[key];
-                    if (!info) {
-                        info = {
-                            total: 0,
-                            breakdown: {},
-                        };
-                        headers.forEach((header)=> {
-                            info.breakdown[header] = 0;
-                        });
-                    }
-                    headers.forEach((header) => {
-                        const offeredVal = offeringInfo.getValue(header, key);
-                        info.breakdown[header] += offeredVal;
-                        info.total += offeredVal;
-                        totalInfo[header] += offeredVal;
-                    });
-                    personInfo[key] = info;
-                });
-            });
-
-            const monthInfo = {
-                headers,
-                personInfo,
-                totalInfo,
-            }
-            outputInfo[dirInfo.name] = monthInfo;
         });
 
+        const totalInfo = aggregateInfo(allOfferingInfos);
         const workbook = new excel.Workbook();
-        Object.keys(outputInfo).forEach((month) => {
-            const monthInfo = outputInfo[month];
-            const worksheet = workbook.addWorksheet(month);
-            const style = workbook.createStyle({
-                font: {
-                    color: '#000000',
-                    size: 10,
+
+        const months = Object.keys(outputInfo).sort((a, b) => {
+            const priority = (x) => {
+                switch (x.toLowerCase()) {
+                    case 'jan':
+                    case 'January':
+                        return 1;
+                    case 'feb':
+                    case 'february':
+                        return 2;
+                    case 'mar':
+                    case 'march':
+                        return 3;
+                    case 'apr':
+                    case 'april':
+                        return 4;
+                    case 'may':
+                        return 5;
+                    case 'jun':
+                    case 'june':
+                        return 6;
+                    case 'jul':
+                    case 'july':
+                        return 7;
+                    case 'aug':
+                    case 'august':
+                        return 8;
+                    case 'sep':
+                    case 'september':
+                        return 9;
+                    case 'oct':
+                    case 'october':
+                        return 10;
+                    case 'nov':
+                    case 'november':
+                        return 11;
+                    case 'dec':
+                    case 'december':
+                        return 12;
+                    default:
+                    return x.toLowerCase();;
                 }
-            });
-            const {
-                headers,
-                personInfo,
-                totalInfo,
-            } = monthInfo;
-
-            let col = 1;
-            let row = 1;
-            worksheet.cell(row, col).string('编号 No.');
-            headers.forEach( (header) => {
-                col += 1;
-                worksheet.cell(row, col).string(header);
-            });
-            col += 1;
-            worksheet.cell(row, col).string('Total');
-
-            const personInfoOutput = {};
-            const personNames = Object.keys(personInfo);
-            personNames.forEach((name) => {
-                const outputName = convertNameForOutput(name);
-                personInfoOutput[outputName] = personInfo[name];
-            });
-            Object.keys(personInfoOutput).sort().forEach((personName) => {
-                row += 1;
-                col = 1;
-                worksheet.cell(row, col).string(personName);
-
-                const { breakdown, total } = personInfoOutput[personName];
-                headers.forEach((header) => {
-                    const val = breakdown[header];
-                    col += 1;
-
-                    if (typeof(val) === 'undefined') {
-                        worksheet.cell(row, col).string('undefined');
-                    } else {
-                        worksheet.cell(row, col).number(val);
-                    }
-                });
-
-                col+= 1;
-                worksheet.cell(row, col).number(total);
-            });
-
-            row += 1;
-            col = 1;
-            worksheet.cell(row, col).string('Total');
-
-            headers.forEach((header) => {
-                col += 1;
-                worksheet.cell(row, col).number(totalInfo[header]);
-            });
+            };
+            return priority(a) - priority(b);
         });
+        months.forEach((month) => {
+            const monthInfo = outputInfo[month];
+            outputExcelWorkSheet(workbook, month, monthInfo);
+        });
+        outputExcelWorkSheet(workbook, 'Total', totalInfo);
 
         workbook.write(path.join(__dirname, 'out.xlsx'));
 
