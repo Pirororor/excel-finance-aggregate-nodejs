@@ -11,7 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "FileReader": "^0.10.2",
-    "excel4node": "^1.7.2",
+    "excel4node": "^1.8.0",
     "exceljs": "^4.0.1",
     "pkg": "^4.4.8",
     "xlsx": "^0.16.2"
